@@ -5,8 +5,11 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.86"
-axum = "0.7.5"
+async-trait = "0.1.81"
+axum = { version = "0.7.5", features = ["macros"] }
+axum-auth = "0.7.0"
 clap = { version = "4.5.9", features = ["derive"] }
+env_logger = "0.11.3"
 log = "0.4.22"
 serde = { version = "1.0.204", features = ["derive"] }
 serde_yaml = "0.9.34"

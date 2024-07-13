@@ -1,9 +1,11 @@
 use axum::{
-    extract::State,
+    extract::{Json, State},
+    http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
     Router,
 };
+use axum_auth::AuthBearer;
 use clap::Parser;
 use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
@@ -21,6 +23,7 @@ struct Config {
     username: String,
     password: String,
     listen_port: u16,
+    tokens: Vec<String>,
 }
 impl Config {
     fn from_yaml_file(file: &str) -> anyhow::Result<Self> {
@@ -29,16 +32,20 @@ impl Config {
         let config = serde_yaml::from_reader(reader)?;
         Ok(config)
     }
+    fn validate_token(&self, token: &str) -> bool {
+        self.tokens.contains(&token.to_string())
+    }
 }
 
 #[tokio::main]
 async fn main() {
+    // setup logger
+    env_logger::init();
     let args = Args::parse();
     let config = Config::from_yaml_file(&args.config_file).expect("Failed to read config file");
     let app = Router::new()
-        .route("/status", get(get_power_status))
-        .route("/on", post(power_on))
-        .route("/off", post(power_off))
+        .route("/power", get(get_power_status))
+        .route("/power", post(power_control))
         .with_state(config.clone())
         .fallback(default_404);
     let addr = format!("0.0.0.0:{}", config.listen_port);
@@ -49,6 +56,11 @@ async fn main() {
         .await
         .expect("Failed to start server");
     info!("Server started on port {}", config.listen_port);
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct PowerControlMsg {
+    action: String,
 }
 enum PowerAction {
     On,
@@ -87,6 +99,8 @@ fn power_action(action: PowerAction, config: &Config) -> Option<PowerStatus> {
     match output {
         "Chassis Power is on" => Some(PowerStatus::On),
         "Chassis Power is off" => Some(PowerStatus::Off),
+        "Chassis Power Control: Up/On" => Some(PowerStatus::On),
+        "Chassis Power Control: Soft" => Some(PowerStatus::Off),
         _ => {
             warn!("Unexpected output from ipmitool: {}", output);
             None
@@ -97,25 +111,40 @@ fn power_action(action: PowerAction, config: &Config) -> Option<PowerStatus> {
 async fn get_power_status(State(config): State<Config>) -> impl IntoResponse {
     info!("Got request for power status");
     let resp = match power_action(PowerAction::Status, &config) {
-        Some(PowerStatus::On) => (axum::http::StatusCode::OK, "on"),
-        Some(PowerStatus::Off) => (axum::http::StatusCode::OK, "off"),
-        None => (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "error"),
+        Some(PowerStatus::On) => (StatusCode::OK, "on"),
+        Some(PowerStatus::Off) => (StatusCode::OK, "off"),
+        None => (StatusCode::INTERNAL_SERVER_ERROR, "error"),
     };
     info!("Returning status: {}", resp.1);
     resp
 }
-async fn power_on(State(config): State<Config>) -> String {
-    info!("Got request to power on");
-    let _status = power_action(PowerAction::On, &config);
 
-    return "ok".to_string();
-}
-async fn power_off(State(config): State<Config>) -> String {
-    info!("Got request to power off");
-    let _status = power_action(PowerAction::Off, &config);
-    return "ok".to_string();
+async fn power_control(
+    State(config): State<Config>,
+    AuthBearer(token): AuthBearer,
+    Json(payload): Json<PowerControlMsg>,
+) -> impl IntoResponse {
+    info!("Got request to power on");
+    info!("Token: {}", token);
+    if !config.validate_token(&token) {
+        return (StatusCode::UNAUTHORIZED, "token not in config");
+    };
+    let action = match payload.action.as_str() {
+        "on" => PowerAction::On,
+        "off" => PowerAction::Off,
+        _ => {
+            warn!("Invalid action: {}", payload.action);
+            return (StatusCode::BAD_REQUEST, "error");
+        }
+    };
+    match power_action(action, &config) {
+        Some(PowerStatus::On) => info!("Power is on"),
+        Some(PowerStatus::Off) => info!("Power is off"),
+        None => return (StatusCode::INTERNAL_SERVER_ERROR, "error"),
+    }
+    (StatusCode::OK, "ok")
 }
 async fn default_404() -> impl IntoResponse {
     info!("Got request for unknown path");
-    axum::http::StatusCode::NOT_FOUND
+    StatusCode::NOT_FOUND
 }
