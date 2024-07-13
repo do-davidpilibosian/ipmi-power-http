@@ -1,0 +1,13 @@
+[package]
+name = "ipmi-power-http"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.86"
+axum = "0.7.5"
+clap = { version = "4.5.9", features = ["derive"] }
+log = "0.4.22"
+serde = { version = "1.0.204", features = ["derive"] }
+serde_yaml = "0.9.34"
+tokio = { version = "1.38.0", features = ["full"] }
