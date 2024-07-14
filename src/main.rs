@@ -111,8 +111,8 @@ fn power_action(action: PowerAction, config: &Config) -> Option<PowerStatus> {
 async fn get_power_status(State(config): State<Config>) -> impl IntoResponse {
     info!("Got request for power status");
     let resp = match power_action(PowerAction::Status, &config) {
-        Some(PowerStatus::On) => (StatusCode::OK, "on"),
-        Some(PowerStatus::Off) => (StatusCode::OK, "off"),
+        Some(PowerStatus::On) => (StatusCode::OK, "{\"is_on\": true}"),
+        Some(PowerStatus::Off) => (StatusCode::OK, "{\"is_on\": false}"),
         None => (StatusCode::INTERNAL_SERVER_ERROR, "error"),
     };
     info!("Returning status: {}", resp.1);
