@@ -19,6 +19,7 @@ A Rust application that provides an HTTP API for controlling power operations (`
     - [Power Control Example](#power-control-example)
 - [Logging](#logging)
 - [Security Considerations](#security-considerations)
+- [Deployment](#deployment)
 - [License](#license)
 
 ## Features
@@ -256,6 +257,19 @@ INFO  Returning status for endpoint1: PowerStatus::On
 - **Configuration File**: The configuration file contains sensitive information (tokens, IPMI credentials). Ensure it has appropriate file permissions and is not accessible to unauthorized users.
 - **Network Security**: Run the application behind a firewall or reverse proxy. Use HTTPS to encrypt traffic, especially if transmitting over untrusted networks.
 - **Error Messages**: The application returns standardized error messages to avoid exposing sensitive information. Server logs contain detailed errors for administrative purposes.
+
+## Deployment
+
+A production deployment configuration for serving ipmi-power-http via Caddy has been included via docker-compose.
+
+create a configuration file for ipmi-power-http and modify the included docker-compose.yml file to point to it, then run
+```bash
+docker-compose up
+```
+and test. If everything works as expected daemonize docker compose
+```bash
+docker-compose up -d
+```
 
 ## License
 

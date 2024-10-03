@@ -1,0 +1,14 @@
+services:
+  ipmi-power-http:
+    build: .
+    volumes:
+      - ./config.yml:/etc/ipmi-power-http/config.yml #config file for ipmi-power-http
+  caddy:
+    image: caddy/caddy
+    restart: unless-stopped
+    ports:
+      - 443:443
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./data/caddy/data:/data
+      - ./data/caddy/config:/config

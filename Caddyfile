@@ -1,0 +1,13 @@
+:443 {
+        reverse_proxy ipmi-power-http:8080 {
+                header_up X-Forwarded-Proto https
+        }
+        encode gzip zstd
+        tls internal {
+                on_demand
+        }
+
+        log {
+                level warn
+        }
+}
