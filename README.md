@@ -1,94 +1,266 @@
-# IPMI Power Control API
-This project provides a simple web service for controlling and querying the power state of a server using IPMI (Intelligent Platform Management Interface). The service is built using Rust, Axum, and Tokio for asynchronous operation. It reads configuration from a YAML file and exposes endpoints for power control and status checking.
-It is intended to use with home-assistant.
+# IPMI Power Control HTTP API
+
+A Rust application that provides an HTTP API for controlling power operations (`on`, `off`, `reset`, `cycle`) on IPMI-enabled devices. The application supports multiple endpoints grouped by tokens, allowing for secure and organized access control.
+
+## Table of Contents
+
+- [Features](#features)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Usage](#usage)
+    - [Starting the Server](#starting-the-server)
+    - [API Endpoints](#api-endpoints)
+        - [Authentication](#authentication)
+        - [Get Power Status](#get-power-status)
+        - [Power Control Actions](#power-control-actions)
+- [Examples](#examples)
+    - [Get Power Status Example](#get-power-status-example)
+    - [Power Control Example](#power-control-example)
+- [Logging](#logging)
+- [Security Considerations](#security-considerations)
+- [License](#license)
 
 ## Features
-Query power status of a server.
-Control power state (turn on/off) of a server.
-Authentication using tokens specified in the configuration file.
-## Requirements
-- Rust
-- ipmitool installed on the system
+
+- **Multiple IPMI Endpoints**: Manage power operations on multiple IPMI-enabled devices.
+- **Group-Based Access Control**: Organize endpoints into groups, each secured with a unique token.
+- **Supported Power Actions**: `on`, `off`, `reset`, `cycle`, and `status`.
+- **Standardized Error Responses**: Returns consistent error messages without exposing sensitive information.
+- **Logging**: Detailed server-side logging for troubleshooting.
+
+## Prerequisites
+
+- **Rust**: Install Rust (version 1.54 or higher recommended) from [rust-lang.org](https://www.rust-lang.org/tools/install).
+- **ipmitool**: Ensure `ipmitool` is installed on the server where the application will run.
+- **Cargo**: Comes with Rust installation; used for building and running the application.
+
+## Installation
+
+1. **Clone the Repository**:
+
+   ```bash
+   git clone https://github.com/yourusername/ipmi-power-http.git
+   cd ipmi-power-http
+   ```
+
+2. **Set Up Dependencies**:
+
+   Ensure your `Cargo.toml` has the following dependencies:
+
+   ```toml
+   [dependencies]
+   axum = "0.6"
+   axum-auth = "0.3"
+   tokio = { version = "1", features = ["full"] }
+   clap = { version = "4", features = ["derive"] }
+   serde = { version = "1.0", features = ["derive"] }
+   serde_json = "1.0"
+   serde_yaml = "0.9"
+   env_logger = "0.10"
+   log = "0.4"
+   ```
+
+3. **Build the Application**:
+
+   ```bash
+   cargo build --release
+   ```
+
 ## Configuration
-Also see repo.
-The service requires a YAML configuration file with the following structure:
+
+Create a YAML configuration file (e.g., `config.yaml`) with the following structure:
 
 ```yaml
-ipmi_address: "192.168.1.100"
-username: "admin"
-password: "password"
 listen_port: 8080
-tokens:
-  - "your-secret-token"
-  - "another-secret-token"
+groups:
+  - name: "group1"
+    token: "your_token_for_group1"
+    endpoints:
+      - name: "endpoint1"
+        ipmi_address: "192.168.1.100"
+        username: "admin"
+        password: "password"
+      - name: "endpoint2"
+        ipmi_address: "192.168.1.101"
+        username: "admin"
+        password: "password"
+  - name: "group2"
+    token: "your_token_for_group2"
+    endpoints:
+      - name: "endpoint3"
+        ipmi_address: "192.168.1.102"
+        username: "admin"
+        password: "password"
 ```
 
-## Example Home Assistant Config
-Also see repo.
-```yaml
-switch:
-  - platform: rest
-    name: My Beefy Server
-    resource: http://127.0.0.1:6677/power
-    body_on: '{"action": "on"}'
-    body_off: '{"action": "off"}'
-    is_on_template: "{{ value_json.is_on }}"
-    headers:
-      Content-Type: application/json
-      Authorization: Bearer a_very_secure_token
-```
-## Running the Service
-Create a configuration file (e.g., config.yaml) with the above structure.
-Build and run the service:
+**Configuration Parameters**:
+
+- `listen_port`: The port on which the server will listen.
+- `groups`: A list of groups, each with:
+    - `name`: A friendly name for the group.
+    - `token`: A unique token used for authenticating requests to this group's endpoints.
+    - `endpoints`: A list of IPMI endpoints within the group.
+        - `name`: A unique identifier for the endpoint.
+        - `ipmi_address`: The IP address or hostname of the IPMI interface.
+        - `username`: Username for IPMI authentication.
+        - `password`: Password for IPMI authentication.
+
+**Note**: Keep the configuration file secure, as it contains sensitive information.
+
+## Usage
+
+### Starting the Server
+
+Run the application, specifying the path to your configuration file:
+
 ```bash
-cargo run -- --config-file config.yaml
+./target/release/ipmi-power-http --config-file config.yaml
 ```
-The server will start and listen on the specified port.
 
-## API Endpoints
- - GET /power
-    Query the current power status of the server.
+**Command-Line Arguments**:
 
-    Request:
+- `--config-file`: Path to the YAML configuration file.
 
-    ```bash
-    curl -X GET http://localhost:8080/power
-    ```
-    Response:
+### API Endpoints
 
-    200 OK with JSON {"is_on": true} or {"is_on": false}
-    500 Internal Server Error if there's an issue querying the power status
- - POST /power
-    Control the power state of the server. Requires an authentication token.
+The application provides two main endpoints for each IPMI endpoint:
 
-    Request:
+- `GET /power/:endpoint_id`: Get the power status of the endpoint.
+- `POST /power/:endpoint_id`: Perform a power control action on the endpoint.
 
-    ```bash
-    curl -X POST http://localhost:8080/power \
-    -H "Authorization: Bearer your-secret-token" \
-    -H "Content-Type: application/json" \
-    -d '{"action": "on"}'
-    ```
-    action can be `on` or `off`.
+#### Authentication
 
-    Response:
-    200 OK with text ok if the action is successful
-    400 Bad Request if the action is invalid
-    401 Unauthorized if the token is not in the configuration
-    500 Internal Server Error if there's an issue performing the action
-    404 Default
-    All other routes return a 404 Not Found.
+All endpoints require a Bearer Token for authentication, provided in the `Authorization` header:
+
+```
+Authorization: Bearer your_token_here
+```
+
+Use the token associated with the group that contains the endpoint you are accessing.
+
+#### Get Power Status
+
+- **Endpoint**: `GET /power/:endpoint_id`
+- **Description**: Retrieves the current power status of the specified endpoint.
+- **Response**:
+
+    - **Success (200 OK)**:
+
+      ```json
+      { "status": "on" }
+      ```
+
+      or
+
+      ```json
+      { "status": "off" }
+      ```
+
+    - **Error (4xx or 5xx)**:
+
+      ```json
+      { "error": "Error message" }
+      ```
+
+#### Power Control Actions
+
+- **Endpoint**: `POST /power/:endpoint_id`
+- **Description**: Performs a power control action (`on`, `off`, `reset`, `cycle`) on the specified endpoint.
+- **Request Body**:
+
+  ```json
+  { "action": "on" }  // or "off", "reset", "cycle"
+  ```
+
+- **Response**:
+
+    - **Success (200 OK)**:
+
+      ```
+      ok
+      ```
+
+    - **Error (4xx or 5xx)**:
+
+      ```json
+      { "error": "Error message" }
+      ```
+
+## Examples
+
+### Get Power Status Example
+
+**Request**:
+
+```http
+GET /power/endpoint1 HTTP/1.1
+Host: your_server_address
+Authorization: Bearer your_token_for_group1
+```
+
+**Response**:
+
+```json
+{ "status": "on" }
+```
+
+### Power Control Example
+
+**Request**:
+
+```http
+POST /power/endpoint1 HTTP/1.1
+Host: your_server_address
+Authorization: Bearer your_token_for_group1
+Content-Type: application/json
+
+{
+  "action": "reset"
+}
+```
+
+**Response**:
+
+```
+ok
+```
+
+**Error Response Example**:
+
+```json
+{ "error": "Command not supported in present state" }
+```
 
 ## Logging
-The service uses env_logger for logging. Ensure you have the environment variable RUST_LOG set to the appropriate log level (e.g., info, debug) to see logs.
 
+The application uses `env_logger` for logging. Logs include informational messages, warnings, and errors, which can be helpful for troubleshooting.
 
-```bash
-RUST_LOG=info cargo run -- --config-file config.yaml
+**Sample Log Output**:
+
+```
+INFO  Server started on port 8080
+INFO  Got request for power status of endpoint endpoint1
+INFO  Returning status for endpoint1: PowerStatus::On
 ```
 
-## License
-This project is licensed under the MIT License.
+**Log Levels**:
 
-## And
-I am lazy so used chatgpt to generate the readme.
+- `INFO`: General operational information about the application's state.
+- `WARN`: Indications of potential issues or unexpected behavior.
+- `ERROR`: Errors that occur during the execution of power actions or other operations.
+
+## Security Considerations
+
+- **Authentication Tokens**: Use strong, randomly generated tokens for group access. Avoid sharing tokens across groups.
+- **Configuration File**: The configuration file contains sensitive information (tokens, IPMI credentials). Ensure it has appropriate file permissions and is not accessible to unauthorized users.
+- **Network Security**: Run the application behind a firewall or reverse proxy. Use HTTPS to encrypt traffic, especially if transmitting over untrusted networks.
+- **Error Messages**: The application returns standardized error messages to avoid exposing sensitive information. Server logs contain detailed errors for administrative purposes.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
+
+---
+
+**Disclaimer**: Use this application responsibly and ensure compliance with your organization's security policies and any relevant regulations. The authors are not responsible for any misuse or damages resulting from the use of this application.

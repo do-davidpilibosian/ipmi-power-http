@@ -1,6 +1,20 @@
-ipmi_address: 192.168.1.99
-username: root
-password: a_very_safe_password
-listen_port: 6677
-tokens:
-  - a_very_secure_token
+listen_port: 8080
+groups:
+  - name: "group1" #access control group name
+    token: "your_token_for_group1" #group wide token
+    endpoints:
+      - name: "endpoint1" #resolves to /power/endpoint1
+        ipmi_address: "192.168.1.100"
+        username: "admin"
+        password: "password"
+      - name: "endpoint2"
+        ipmi_address: "192.168.1.101"
+        username: "admin"
+        password: "password"
+  - name: "group2"
+    token: "your_token_for_group2"
+    endpoints:
+      - name: "endpoint3"
+        ipmi_address: "192.168.1.102"
+        username: "admin"
+        password: "password"
